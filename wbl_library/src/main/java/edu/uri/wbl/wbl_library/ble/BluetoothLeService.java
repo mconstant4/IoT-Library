@@ -2,7 +2,6 @@ package edu.uri.wbl.wbl_library.ble;
 
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
@@ -33,32 +32,102 @@ import static edu.uri.wbl.wbl_library.ble.BleAction.READ_CHARACTERISTIC;
 import static edu.uri.wbl.wbl_library.ble.BleAction.WRITE_CHARACTERISTIC;
 
 /**
- * Created by mconstant on 12/6/17.
+ * The BluetoothLeService is responsible for providing a layer of abstraction between Android's
+ * BLE API and the user (in this case, the developer using the WBL IoT Library). This Service
+ * provides all of the essential BLE functions including connecting to and disconnecting from
+ * nearby BLE devices, discovering services available on connected BLE devices, reading and
+ * writing characteristics, and enabling notifications for when a characteristic's value is changed.
+ * The main goal of this Service (and all of its related components) is to allow developers to
+ * quickly and efficiently develop Android IoT applications without having to deal with the
+ * nuances associated with Android's BLE API.
+ *
+ * This Service is structured in such a way that the user interacts with it via "Action Packets".
+ * Static methods are provided so that the user does not need to worry about the internals of the
+ * "Action Packets" and just calls the appropriate method to carry out the desired action. For
+ * example, in order for the user to attempt to connect to a nearby BLE device, he/she simply
+ * calls the BluetoothLeService.CONNECT(Context, String) method supplying the Bluetooth Device
+ * Address of the desired BLE device in String format. This Service does not provide a scanning
+ * function, meaning the user must acquire the device's Bluetooth Device Address somehow (either
+ * statically or dynamically) before this Service will be useful to him/her.
+ *
+ * Information and data is sent back to the caller via "Update Packets". These packets are delivered
+ * to any component with a registered BleUpdateReceiver. Updates include connection state changes,
+ * services discovered, and characteristics read/written/notified. View the BleDemoActivity for
+ * a sample implementation of a BleUpdateReceiver.
+ *
+ * @author Matthew Constant
+ * @version 1.0, 12/07/2017
  */
 
 public class BluetoothLeService extends Service {
+    /**
+     * The return value for the onStartCommand method. START_STICKY means that if the OS kills this
+     * Service to free up resources, it will restart this Service once it is possible to do so.
+     */
     private static final int RETURN_POLICY = START_STICKY;
+    /**
+     * The tag used for all debug logging.
+     */
     private static final String TAG = "BluetoothLeService";
+    /**
+     * The key for all Intent extras containing the BleAction to be taken.
+     */
     private static final String EXTRA_ACTION = "wbl.library.ble.extras.action";
+    /**
+     * The key for all Intent extras containing the Bluetooth Device Address.
+     */
     private static final String EXTRA_BD_ADDR = "wbl.library.ble.extras.bd_addr";
+    /**
+     * The key for all Intent extras containing the Bluetooth GATT.
+     */
     private static final String EXTRA_GATT = "wbl.library.ble.extras.gatt";
+    /**
+     * The key for all Intent extras containing the Service UUID (as a String)
+     */
     private static final String EXTRA_SERVICE = "wbl.library.ble.extras.service";
+    /**
+     * The key for all Intent extras containing the Characteristic UUID (as a String)
+     */
     private static final String EXTRA_CHARACTERISTIC = "wbl.library.ble.extras.char";
+    /**
+     * The key for all Intent extras containing the Characteristic's value.
+     */
     private static final String EXTRA_VALUE = "wbl.library.ble.extras.value";
+    /**
+     * The UUID (as a String) of the descriptor controlling whether the Characteristic has been
+     * enabled for notifications or not.
+     */
     private static final String NOTIFICATION_DESCRIPTOR = "00002902-0000-1000-8000-00805F9B34FB";
 
+    /**
+     * The CONNECT action attempts to connect to the BLE Device corresponding to the Bluetooth
+     * Device Address provided. Upon success, the UPDATE_CONNECT update packet is broadcast.
+     *
+     * @param context Context of the calling component
+     * @param bd_addr The Bluetooth Device Address of the desired BLE Device
+     */
     public static void CONNECT(Context context, String bd_addr) {
         if(bd_addr == null) {
             Log.e(TAG, "Error: BD_ADDR NULL");
             return;
         }
 
+        // Populate Connect Action Packet
         Intent intent = new Intent(context, BluetoothLeService.class);
         intent.putExtra(EXTRA_ACTION, CONNECT);
         intent.putExtra(EXTRA_BD_ADDR, bd_addr);
         context.startService(intent);
     }
 
+    /**
+     * The DISCOVER_SERVICES action attempts to query and store all Services available on the
+     * connected BLE Device. Upon success, the SERVICES_DISCOVERED update packet is broadcast.
+     *
+     * NOTE: The BLE Device referenced must have already been connected via a call to this Service.
+     *
+     * @param context Context of the calling component
+     * @param bd_addr The Bluetooth Device Address of the desired BLE Device
+     */
     public static void DISCOVER_SERVICES(Context context, String bd_addr) {
         if(bd_addr == null) {
             Log.e(TAG, "Error: BD_ADDR NULL");
@@ -71,6 +140,18 @@ public class BluetoothLeService extends Service {
         context.startService(intent);
     }
 
+    /**
+     * The READ_CHARACTERISTIC action sends a read request to the connected BLE Device. Upon success,
+     * the UPDATE_CHARACTERISTIC_READ update packet is broadcast.
+     *
+     * NOTE: The BLE Device referenced must have already been connected via a call to this Service
+     *          and the DISCOVERED_SERVICES update packet must have been successfully received.
+     *
+     * @param context Context of the calling component
+     * @param bd_addr The Bluetooth Device Address of the desired BLE Device
+     * @param serviceUuid Identifies the Service the Characteristic belongs to
+     * @param charUuid Identifies the Characteristic to read from
+     */
     public static void READ_CHARACTERISTIC(Context context, String bd_addr, String serviceUuid, String charUuid) {
         if(bd_addr == null || serviceUuid == null || charUuid == null) {
             Log.e(TAG, "Error: NULL Parameters");
@@ -85,6 +166,18 @@ public class BluetoothLeService extends Service {
         context.startService(intent);
     }
 
+    /**
+     * The WRITE_CHARACTERISTIC action sends a read request to the connected BLE Device. Upon success,
+     * the UPDATE_CHARACTERISTIC_WRITTEN update packet is broadcast.
+     *
+     * NOTE: The BLE Device referenced must have already been connected via a call to this Service
+     *          and the DISCOVERED_SERVICES update packet must have been successfully received.
+     *
+     * @param context Context of the calling component
+     * @param bd_addr The Bluetooth Device Address of the desired BLE Device
+     * @param serviceUuid Identifies the Service the Characteristic belongs to
+     * @param charUuid Identifies the Characteristic to write to
+     */
     public static void WRITE_CHARACTERISTIC(Context context, String bd_addr, String serviceUuid, String charUuid, byte[] value) {
         if(bd_addr == null || serviceUuid == null || charUuid == null) {
             Log.e(TAG, "Error: NULL Parameters");
@@ -100,6 +193,19 @@ public class BluetoothLeService extends Service {
         context.startService(intent);
     }
 
+    /**
+     * The ENABLE_NOTIFICATION action attempts to enable notifications for the specified
+     * Characteristic. Enabling notifications allows the user to be automatically notified any
+     * time the Characteristic's value has changed.
+     *
+     * NOTE: The BLE Device referenced must have already been connected via a call to this Service
+     *          and the DISCOVERED_SERVICES update packet must have been successfully received.
+     *
+     * @param context Context of the calling component
+     * @param bd_addr The Bluetooth Device Address of the desired BLE Device
+     * @param serviceUuid Identifies the Service the Characteristic belongs to
+     * @param charUuid Identifies the Characteristic to be notified of
+     */
     public static void ENABLE_NOTIFICATION(Context context, String bd_addr, String serviceUuid, String charUuid) {
         if(bd_addr == null || serviceUuid == null || charUuid == null) {
             Log.e(TAG, "Error: NULL Parameters");
@@ -114,6 +220,18 @@ public class BluetoothLeService extends Service {
         context.startService(intent);
     }
 
+    /**
+     * The DISABLE_NOTIFICATION action disables notifications for the specified
+     * Characteristic.
+     *
+     * NOTE: The BLE Device referenced must have already been connected via a call to this Service
+     *          and the DISCOVERED_SERVICES update packet must have been successfully received.
+     *
+     * @param context Context of the calling component
+     * @param bd_addr The Bluetooth Device Address of the desired BLE Device
+     * @param serviceUuid Identifies the Service the Characteristic belongs to
+     * @param charUuid Identifies the Characteristic to disable notifications from
+     */
     public static void DISABLE_NOTIFICATION(Context context, String bd_addr, String serviceUuid, String charUuid) {
         if(bd_addr == null || serviceUuid == null || charUuid == null) {
             Log.e(TAG, "Error: NULL Parameters");
@@ -131,8 +249,15 @@ public class BluetoothLeService extends Service {
     private Looper mServiceLooper;
     private ServiceHandler mServiceHandler;
 
+    /**
+     * This class runs on a separate Thread than the Service's (which is the main Thread). This
+     * allows the Service to handle each action in the background rather than block the application's
+     * main Thread.
+     *
+     * TODO: Explore possibility of creating new Thread for each action
+     */
     private final class ServiceHandler extends Handler {
-        public ServiceHandler(Looper looper) {
+        private ServiceHandler(Looper looper) {
             super(looper);
         }
 
@@ -698,7 +823,7 @@ public class BluetoothLeService extends Service {
                     log("Connected to " + gatt.getDevice().getAddress());
                     mConnectedDevices.put(gatt.getDevice().getAddress(), gatt);
 
-                    // TODO Send BleUpdate
+                    BleUpdateReceiver.UPDATE_CONNECTED(mContext, gatt.getDevice().getAddress());
 
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
@@ -706,7 +831,7 @@ public class BluetoothLeService extends Service {
                     mConnectedDevices.remove(gatt.getDevice().getAddress());
                     gatt.close(); // NULL Pointer?
 
-                    // TODO Send BleUpdate
+                    BleUpdateReceiver.UPDATE_DISCONNECTED(mContext, gatt.getDevice().getAddress());
                     break;
             }
         }
@@ -720,7 +845,7 @@ public class BluetoothLeService extends Service {
 
             log("Services Discovered on " + gatt.getDevice().getAddress());
 
-            // TODO Send BleUpdate
+            BleUpdateReceiver.UPDATE_SERVICES_DISCOVERED(mContext, gatt);
         }
 
         @Override
@@ -731,6 +856,8 @@ public class BluetoothLeService extends Service {
             }
 
             log("Characteristic " + characteristic.getUuid().toString() + " Read from Device " + gatt.getDevice().getAddress());
+
+            BleUpdateReceiver.UPDATE_CHARACTERISTIC_READ(mContext, gatt, characteristic, characteristic.getValue());
         }
 
         @Override
@@ -741,11 +868,15 @@ public class BluetoothLeService extends Service {
             }
 
             log("Characteristic " + characteristic.getUuid().toString() + " Written to Device " + gatt.getDevice().getAddress());
+
+            BleUpdateReceiver.UPDATE_CHARACTERISTIC_WRITTEN(mContext, gatt, characteristic, characteristic.getValue());
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             log("Characteristic " + characteristic.getUuid().toString() + " Updated from Device " + gatt.getDevice().getAddress());
+
+            BleUpdateReceiver.UPDATE_CHARACTERISTIC_NOTIFIED(mContext, gatt, characteristic, characteristic.getValue());
         }
     };
 }
