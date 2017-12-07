@@ -28,6 +28,17 @@ public class BleActionModel {
         mBluetoothDeviceAddress = bluetoothDeviceAddress;
     }
 
+    public BleActionModel(BleAction action, BluetoothGatt gatt) {
+        mBleAction = action;
+        mBluetoothGatt = gatt;
+    }
+
+    public BleActionModel(BleAction action, BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+        mBleAction = action;
+        mBluetoothGatt = gatt;
+        mCharacteristic = characteristic;
+    }
+
     public BleAction getBleAction() {
         return mBleAction;
     }
